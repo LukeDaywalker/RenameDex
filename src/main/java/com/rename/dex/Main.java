@@ -5,6 +5,10 @@ import org.jf.dexlib2.DexFileFactory;
 import org.jf.dexlib2.Opcodes;
 import org.jf.dexlib2.iface.ClassDef;
 import org.jf.dexlib2.iface.DexFile;
+import org.jf.dexlib2.rewriter.DexRewriter;
+import org.jf.dexlib2.rewriter.Rewriter;
+import org.jf.dexlib2.rewriter.RewriterModule;
+import org.jf.dexlib2.rewriter.Rewriters;
 import org.jf.util.IndentingWriter;
 
 import javax.annotation.Nonnull;
@@ -14,6 +18,9 @@ import java.net.URL;
 import java.util.*;
 
 public class Main {
+    private static Map<String, CompareClassDef> mClassDefMap = new LinkedHashMap<String, CompareClassDef>();
+    private static Map<String, CompareClassDef> mRealClassDefMap = new HashMap<String, CompareClassDef>();
+    private static Map<String, ClassDefHandler> mClassDefHandlerMap = new HashMap<String, ClassDefHandler>();
 
     public static void main(String[] args) {
 
@@ -29,7 +36,7 @@ public class Main {
             BufferedWriter bufWriter = new BufferedWriter(new OutputStreamWriter(
                     new FileOutputStream(smaliFile), "UTF8"));
 
-            Writer writer = new IndentingWriter(bufWriter);
+            final Writer writer = new IndentingWriter(bufWriter);
 
             // write your code here
             String test = "dex";
@@ -49,38 +56,54 @@ public class Main {
                     return c1.compareWith(c2);
                 }
             });
+            mClassDefMap.clear();
+            mRealClassDefMap.clear();
+            mClassDefHandlerMap.clear();
             for (ClassDef classDef : newClasses) {
-                CompareClassDef compareClassDef=new CompareClassDef(classDef);
-                String className = compareClassDef.getType();
+                CompareClassDef compareClassDef = new CompareClassDef(classDef);
                 String source = compareClassDef.getSourceFile();
                 if (source == null || !source.endsWith(".java")) {
                     continue;
                 }
-                String oldName = getOldName(className);
-                String newName = getNewName(source);
-                if (oldName.contains(newName) || oldName.length() > 3) {
-                    continue;
+                String type = compareClassDef.getType();
+                String realOuterType = compareClassDef.getRealOuterType();
+                mClassDefMap.put(type, compareClassDef);
+                ClassDefHandler classDefHandler = mClassDefHandlerMap.get(realOuterType);
+                if (classDefHandler == null) {
+                    classDefHandler = new ClassDefHandler();
+                    mClassDefHandlerMap.put(realOuterType, classDefHandler);
                 }
-//                oldName=className;
-//                newName=source;
-                writer.write(oldName + "=" + newName + "\n");
+                classDefHandler.add(compareClassDef);
+                if (mRealClassDefMap.containsKey(realOuterType)) {
+                    if (compareClassDef.isSameName()) {
+                        mRealClassDefMap.put(realOuterType, compareClassDef);
+                        classDefHandler.setOuterClass(compareClassDef);
+                    }
+                } else {
+                    if (!compareClassDef.isSubClass()) {
+                        mRealClassDefMap.put(realOuterType, compareClassDef);
+                        classDefHandler.setOuterClass(compareClassDef);
+                    }
+                }
+
             }
 
+//            for (CompareClassDef compareClassDef : mClassDefMap.values()) {
+//                writer.write(compareClassDef.getType() + "=" + compareClassDef.getRealType() + "\n");
+//            }
 
-//            DexRewriter rewriter = new DexRewriter(new RewriterModule() {
-//                public Rewriter<String> getTypeRewriter(Rewriters rewriters) {
-//                    return new Rewriter<String>() {
-//                        public String rewrite(String value) {
-//                            if (value.equals("Lorg/blah/MyBlah;")) {
-//                                return "Lorg/blah/YourBlah;";
-//                            }
-//                            return value;
-//                        }
-//                    };
-//                }
-//            });
-//            DexFile rewrittenDexFile = rewriter.rewriteDexFile(dexFile);
-//            DexFileFactory.writeDexFile("C:\\Users\\LukeSkyWalker\\IdeaProjects\\RenameDex\\new.dex",rewrittenDexFile);
+
+            DexRewriter rewriter = new DexRewriter(new RewriterModule() {
+                public Rewriter<String> getTypeRewriter(Rewriters rewriters) {
+                    return new Rewriter<String>() {
+                        public String rewrite(String value) {
+                            return getRealType(value);
+                        }
+                    };
+                }
+            });
+            DexFile rewrittenDexFile = rewriter.rewriteDexFile(dexFile);
+            DexFileFactory.writeDexFile("C:\\Users\\LukeSkyWalker\\IdeaProjects\\RenameDex\\new.dex", rewrittenDexFile);
         } catch (IOException e) {
             e.printStackTrace();
         } catch (URISyntaxException e) {
@@ -90,56 +113,28 @@ public class Main {
 
     }
 
+    private static String getRealType(String value) {
+        if (value.length() == 1
+                || value.startsWith("[") && value.length() == 2) {
+            return value;
+        }
+        if (value.startsWith("L")) {
+            if (mClassDefMap.containsKey(value)) {
+                return mClassDefMap.get(value).getRealType();
+            }
+        } else if (value.startsWith("[")) {
+            String key = value.substring(1);
+            if (mClassDefMap.containsKey(key)) {
+                return "[" + mClassDefMap.get(key).getRealType();
+            }
+        }
+        return value;
+    }
+
     @Nonnull
     private static File findResource(String resource) throws URISyntaxException {
         URL resUrl = Resources.getResource(resource);
         return new File(resUrl.toURI());
     }
 
-    public static String getOldName(String className) {
-        //class names should be passed in the normal dalvik style, with a leading L, a trailing ;, and using
-        //'/' as a separator.
-        if (className.charAt(0) != 'L' || className.charAt(className.length() - 1) != ';') {
-            throw new RuntimeException("Not a valid dalvik class name");
-        }
-
-        int packageElementCount = 1;
-        for (int i = 1; i < className.length() - 1; i++) {
-            if (className.charAt(i) == '/') {
-                packageElementCount++;
-            }
-        }
-
-        String[] packageElements = new String[packageElementCount];
-        int elementIndex = 0;
-        int elementStart = 1;
-        for (int i = 1; i < className.length() - 1; i++) {
-            if (className.charAt(i) == '/') {
-                //if the first char after the initial L is a '/', or if there are
-                //two consecutive '/'
-                if (i - elementStart == 0) {
-                    throw new RuntimeException("Not a valid dalvik class name");
-                }
-
-                packageElements[elementIndex++] = className.substring(elementStart, i);
-                elementStart = ++i;
-            }
-        }
-
-        //at this point, we have added all the package elements to packageElements, but still need to add
-        //the final class name. elementStart should point to the beginning of the class name
-
-        //this will be true if the class ends in a '/', i.e. Lsome/package/className/;
-        if (elementStart >= className.length() - 1) {
-            throw new RuntimeException("Not a valid dalvik class name");
-        }
-
-        packageElements[elementIndex] = className.substring(elementStart, className.length() - 1);
-
-        return packageElements[elementIndex];
-    }
-
-    public static String getNewName(String source) {
-        return source.substring(0, source.length() - 5);
-    }
 }

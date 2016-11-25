@@ -17,8 +17,12 @@ public class CompareClassDef implements ClassDef {
     private final ClassDef mClassDef;
     private final String mPackage;
     private final String mName;
+    private final String mOuterName;
+    private final String mInnerName;
     private String mRealType;
     private String mRealName;
+    private final String mRealOuterName;
+    private final String mRealOuterType;
 
     public CompareClassDef(ClassDef classDef) {
         mClassDef = classDef;
@@ -26,13 +30,27 @@ public class CompareClassDef implements ClassDef {
         int index = type.lastIndexOf('/');
         mPackage = type.substring(0, index);
         mName = type.substring(index + 1, type.length() - 1);
+
+        int index$ = mName.indexOf("$");
+        if (index$ > 0) {
+            mOuterName = mName.substring(0, index$);
+            mInnerName = mName.substring(index$ + 1);
+        } else {
+            mOuterName = mName;
+            mInnerName = "";
+        }
+
         String sourceFile = classDef.getSourceFile();
         if (sourceFile != null) {
             mRealName = sourceFile.substring(0, sourceFile.length() - 5);
             mRealType = mPackage + "/" + mRealName + ";";
+            mRealOuterName = mRealName;
+            mRealOuterType = mRealType;
         } else {
             mRealName = mName;
             mRealType = type;
+            mRealOuterName = mName;
+            mRealOuterType = type;
         }
     }
 
@@ -53,8 +71,52 @@ public class CompareClassDef implements ClassDef {
         return mRealType;
     }
 
+    public String getRealOuterName() {
+        return mRealOuterName;
+    }
+
+    public String getRealOuterType() {
+        return mRealOuterType;
+    }
+
     public String getName() {
         return mName;
+    }
+
+    public String getOuterName() {
+        return mOuterName;
+    }
+
+    public String getInnerName() {
+        return mInnerName;
+    }
+
+    public boolean isSameName() {
+        return mName.equals(mRealOuterName);
+    }
+
+    public boolean hasSameName() {
+        return mOuterName.equals(mRealName);
+    }
+
+    public boolean isSubClass() {
+        return !mInnerName.equals("");
+    }
+
+    public void convertToSubClass(CompareClassDef outerClass) {
+        if (isSubClass()) {
+            if (mOuterName.equals(outerClass.getOuterName())) {
+                setRealName(mRealOuterName + "$" + mInnerName);
+            } else {
+                setRealName(mRealOuterName + "$" + mName);
+            }
+        } else {
+            if (getType().equals(outerClass.getType())) {
+                setRealName(mRealOuterName);
+            } else {
+                setRealName(mRealOuterName + "$" + mName);
+            }
+        }
     }
 
 
@@ -67,7 +129,11 @@ public class CompareClassDef implements ClassDef {
     public int compareWith(CompareClassDef o) {
         int p = compareString(getPackage(), o.getPackage());
         if (p == 0) {
-            return compareString(getName(), o.getName());
+            int out = compareString(getOuterName(), o.getOuterName());
+            if (out == 0) {
+                return compareString(getInnerName(), o.getInnerName());
+            }
+            return out;
         } else {
             return p;
         }
