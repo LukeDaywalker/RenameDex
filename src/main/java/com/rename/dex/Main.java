@@ -88,9 +88,9 @@ public class Main {
 
             }
 
-//            for (CompareClassDef compareClassDef : mClassDefMap.values()) {
-//                writer.write(compareClassDef.getType() + "=" + compareClassDef.getRealType() + "\n");
-//            }
+            for (CompareClassDef compareClassDef : mClassDefMap.values()) {
+                writer.write(compareClassDef.getType() + "=" + compareClassDef.getRealType() + "\n");
+            }
 
 
             DexRewriter rewriter = new DexRewriter(new RewriterModule() {

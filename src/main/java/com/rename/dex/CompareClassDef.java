@@ -103,20 +103,44 @@ public class CompareClassDef implements ClassDef {
         return !mInnerName.equals("");
     }
 
-    public void convertToSubClass(CompareClassDef outerClass) {
+    public void renameClass(CompareClassDef outerClass) {
         if (isSubClass()) {
-            if (mOuterName.equals(outerClass.getOuterName())) {
-                setRealName(mRealOuterName + "$" + mInnerName);
+            if (mOuterName.equals(outerClass.getOuterName())) {//如果
+                setRealName(getRegularName(mRealOuterName + "$" + mInnerName));
             } else {
-                setRealName(mRealOuterName + "$" + mName);
+                setRealName(getRegularName(mRealOuterName + "$" + mName));
             }
         } else {
-            if (getType().equals(outerClass.getType())) {
-                setRealName(mRealOuterName);
+            if (getType().equals(outerClass.getType())) {//如果为外部类
+                setRealName(getRegularName(mRealOuterName));
             } else {
-                setRealName(mRealOuterName + "$" + mName);
+                setRealName(getRegularName(mRealOuterName + "$" + mName));
             }
         }
+    }
+
+    private String getRegularName(String name) {
+        if (mRealOuterName.equals("R") && name.length() > 3) {//R文件不做处理
+            return name;
+        }
+        String[] s = name.split("\\$");
+        String result = getRegularOneName(s[0]);
+        for (int i = 1; i < s.length; i++) {
+            result += "$" + getRegularOneName(s[i]);
+        }
+        return result;
+    }
+
+    private String getRegularOneName(String name) {
+        if (!isRegularName(name)) {
+            name = "IC" + name;
+        }
+        return name;
+    }
+
+    private boolean isRegularName(String name) {
+        char c = name.charAt(0);
+        return Character.isUpperCase(c) || Character.isDigit(c);
     }
 
 
@@ -127,7 +151,7 @@ public class CompareClassDef implements ClassDef {
     }
 
     public int compareWith(CompareClassDef o) {
-        int p = compareString(getPackage(), o.getPackage());
+        int p = comparePackage(getPackage(), o.getPackage());
         if (p == 0) {
             int out = compareString(getOuterName(), o.getOuterName());
             if (out == 0) {
@@ -137,6 +161,43 @@ public class CompareClassDef implements ClassDef {
         } else {
             return p;
         }
+    }
+
+    private int comparePackage(String name1, String name2) {
+        return name1.compareTo(name2);
+//        String[] s1 = name1.split("/");
+//        String[] s2 = name2.split("/");
+//        if (s1.length > s2.length) {
+//            for (int i = 0; i < s2.length; i++) {
+//                int n = compareString(s1[i], s2[i]);
+//                if (n == 0) {
+//                    continue;
+//                } else {
+//                    return n;
+//                }
+//            }
+//            return 1;
+//        } else if (s1.length < s2.length) {
+//            for (int i = 0; i < s1.length; i++) {
+//                int n = compareString(s1[i], s2[i]);
+//                if (n == 0) {
+//                    continue;
+//                } else {
+//                    return n;
+//                }
+//            }
+//            return -1;
+//        } else {
+//            for (int i = 0; i < s1.length; i++) {
+//                int n = compareString(s1[i], s2[i]);
+//                if (n == 0) {
+//                    continue;
+//                } else {
+//                    return n;
+//                }
+//            }
+//            return 0;
+//        }
     }
 
     private int compareString(String type1, String type2) {
