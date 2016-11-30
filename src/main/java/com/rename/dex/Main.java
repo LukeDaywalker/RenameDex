@@ -3,8 +3,10 @@ package com.rename.dex;
 import com.google.common.io.Resources;
 import org.jf.dexlib2.DexFileFactory;
 import org.jf.dexlib2.Opcodes;
+import org.jf.dexlib2.base.reference.BaseFieldReference;
 import org.jf.dexlib2.iface.ClassDef;
 import org.jf.dexlib2.iface.DexFile;
+import org.jf.dexlib2.iface.reference.FieldReference;
 import org.jf.dexlib2.rewriter.DexRewriter;
 import org.jf.dexlib2.rewriter.Rewriter;
 import org.jf.dexlib2.rewriter.RewriterModule;
@@ -108,6 +110,37 @@ public class Main {
                         }
                     };
                 }
+
+                @Nonnull
+                @Override
+                public Rewriter<FieldReference> getFieldReferenceRewriter(@Nonnull Rewriters rewriters) {
+                    return new Rewriter<FieldReference>() {
+                        @Nonnull
+                        @Override
+                        public FieldReference rewrite(@Nonnull final FieldReference value) {
+                            return new BaseFieldReference() {
+                                @Nonnull
+                                @Override
+                                public String getDefiningClass() {
+                                    return value.getDefiningClass();
+                                }
+
+                                @Nonnull
+                                @Override
+                                public String getName() {
+                                    return getTypeFieldName(value);
+                                }
+
+                                @Nonnull
+                                @Override
+                                public String getType() {
+                                    return value.getType();
+                                }
+
+                            };
+                        }
+                    };
+                }
             });
             DexFile rewrittenDexFile = rewriter.rewriteDexFile(dexFile);
             DexFileFactory.writeDexFile("C:\\Users\\LukeSkyWalker\\IdeaProjects\\RenameDex\\new.dex", rewrittenDexFile);
@@ -117,6 +150,25 @@ public class Main {
             e.printStackTrace();
         }
 
+
+    }
+
+    private static String getTypeFieldName(FieldReference dexBackedField) {
+        String type = dexBackedField.getType();
+        int length = type.length();
+        int index = type.lastIndexOf("/");
+        int index$ = type.lastIndexOf("$");
+        if (index$ > 0) {
+            index = index$;
+        }
+        String name;
+        if (index > 0) {
+            name = "m" + type.substring(index + 1, length - 1) + dexBackedField.getName();
+        } else {
+            name = dexBackedField.getName();
+            System.out.println(type);
+        }
+        return name;
 
     }
 

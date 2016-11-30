@@ -111,6 +111,6 @@ Le/a/->Lu/aly/
 Lorg/a/a/a/->Lorg/apache/commons/cli/
 Lorg/a/a/b/->Lorg/apache/commons/io/
 Lorg/a/a/b/a/->Lorg/apache/commons/io/output/
-Lorg/a/a/c/->Lorg/apache/commons/long/
-Lorg/a/a/c/a/->Lorg/apache/commons/long/math/
-Lorg/a/a/c/b/->Lorg/apache/commons/long/text/
+Lorg/a/a/c/->Lorg/apache/commons/long3/
+Lorg/a/a/c/a/->Lorg/apache/commons/long3/math/
+Lorg/a/a/c/b/->Lorg/apache/commons/long3/text/
