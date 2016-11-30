@@ -20,15 +20,16 @@ public class CompareClassDef implements ClassDef {
     private final String mOuterName;
     private final String mInnerName;
     private String mRealType;
+    private String mRealPackage;
     private String mRealName;
-    private final String mRealOuterName;
-    private final String mRealOuterType;
+    private final String mSourceName;
+    private final String mSourceType;
 
     public CompareClassDef(ClassDef classDef) {
         mClassDef = classDef;
         String type = classDef.getType();
         int index = type.lastIndexOf('/');
-        mPackage = type.substring(0, index);
+        mPackage = type.substring(0, index + 1);
         mName = type.substring(index + 1, type.length() - 1);
 
         int index$ = mName.indexOf("$");
@@ -40,17 +41,18 @@ public class CompareClassDef implements ClassDef {
             mInnerName = "";
         }
 
+        mRealPackage = mPackage;
         String sourceFile = classDef.getSourceFile();
         if (sourceFile != null) {
             mRealName = sourceFile.substring(0, sourceFile.length() - 5);
-            mRealType = mPackage + "/" + mRealName + ";";
-            mRealOuterName = mRealName;
-            mRealOuterType = mRealType;
+            mRealType = mRealPackage + mRealName + ";";
+            mSourceName = mRealName;
+            mSourceType = mRealType;
         } else {
             mRealName = mName;
             mRealType = type;
-            mRealOuterName = mName;
-            mRealOuterType = type;
+            mSourceName = mOuterName;
+            mSourceType = type;
         }
     }
 
@@ -58,9 +60,18 @@ public class CompareClassDef implements ClassDef {
         return mPackage;
     }
 
+    public String getRealPackage() {
+        return mRealPackage;
+    }
+
+    public void setRealPackage(String realPackage) {
+        mRealPackage = realPackage;
+        mRealType = mRealPackage + mRealName + ";";
+    }
+
     public void setRealName(String name) {
         mRealName = name;
-        mRealType = mPackage + "/" + mRealName + ";";
+        mRealType = mRealPackage + mRealName + ";";
     }
 
     public String getRealName() {
@@ -71,12 +82,12 @@ public class CompareClassDef implements ClassDef {
         return mRealType;
     }
 
-    public String getRealOuterName() {
-        return mRealOuterName;
+    public String getSourceName() {
+        return mSourceName;
     }
 
-    public String getRealOuterType() {
-        return mRealOuterType;
+    public String getSourceType() {
+        return mSourceType;
     }
 
     public String getName() {
@@ -92,7 +103,7 @@ public class CompareClassDef implements ClassDef {
     }
 
     public boolean isSameName() {
-        return mName.equals(mRealOuterName);
+        return mName.equals(mSourceName);
     }
 
     public boolean hasSameName() {
@@ -106,21 +117,21 @@ public class CompareClassDef implements ClassDef {
     public void renameClass(CompareClassDef outerClass) {
         if (isSubClass()) {
             if (mOuterName.equals(outerClass.getOuterName())) {//如果
-                setRealName(getRegularName(mRealOuterName + "$" + mInnerName));
+                setRealName(getRegularName(mSourceName + "$" + mInnerName));
             } else {
-                setRealName(getRegularName(mRealOuterName + "$" + mName));
+                setRealName(getRegularName(mSourceName + "$" + mName));
             }
         } else {
             if (getType().equals(outerClass.getType())) {//如果为外部类
-                setRealName(getRegularName(mRealOuterName));
+                setRealName(getRegularName(mSourceName));
             } else {
-                setRealName(getRegularName(mRealOuterName + "$" + mName));
+                setRealName(getRegularName(mSourceName + "$" + mName));
             }
         }
     }
 
     private String getRegularName(String name) {
-        if (mRealOuterName.equals("R") && name.length() > 3) {//R文件不做处理
+        if (mSourceName.equals("R") && name.length() > 3) {//R文件不做处理
             return name;
         }
         String[] s = name.split("\\$");

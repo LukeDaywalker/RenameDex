@@ -18,13 +18,23 @@ import java.net.URL;
 import java.util.*;
 
 public class Main {
+    private static Map<String, String> mPackageMap = new HashMap<String, String>();
     private static Map<String, CompareClassDef> mClassDefMap = new LinkedHashMap<String, CompareClassDef>();
-    private static Map<String, CompareClassDef> mRealClassDefMap = new HashMap<String, CompareClassDef>();
+    private static Map<String, CompareClassDef> mSourceClassDefMap = new HashMap<String, CompareClassDef>();
     private static Map<String, ClassDefHandler> mClassDefHandlerMap = new HashMap<String, ClassDefHandler>();
 
     public static void main(String[] args) {
 
         try {
+            FileReader fr = new FileReader(findResource("text\\packages.txt"));//获取文件流
+            BufferedReader br = new BufferedReader(fr); //将流整体读取。
+            mPackageMap.clear();
+            String str;
+            while ((str = br.readLine()) != null) {//判断是否是最后一行
+                String[] packages = str.split("->");
+                mPackageMap.put(packages[0], packages[1]);
+            }
+
             File smaliFile = new File("C:\\Users\\LukeSkyWalker\\IdeaProjects\\RenameDex\\namelines.txt");
             if (!smaliFile.exists()) {
                 if (!smaliFile.createNewFile()) {
@@ -57,31 +67,28 @@ public class Main {
                 }
             });
             mClassDefMap.clear();
-            mRealClassDefMap.clear();
+            mSourceClassDefMap.clear();
             mClassDefHandlerMap.clear();
             for (ClassDef classDef : newClasses) {
                 CompareClassDef compareClassDef = new CompareClassDef(classDef);
-                String source = compareClassDef.getSourceFile();
-                if (source == null || !source.endsWith(".java")) {
-                    continue;
-                }
+                compareClassDef = renamePackage(compareClassDef);
                 String type = compareClassDef.getType();
-                String realOuterType = compareClassDef.getRealOuterType();
+                String sourceType = compareClassDef.getSourceType();
                 mClassDefMap.put(type, compareClassDef);
-                ClassDefHandler classDefHandler = mClassDefHandlerMap.get(realOuterType);
+                ClassDefHandler classDefHandler = mClassDefHandlerMap.get(sourceType);
                 if (classDefHandler == null) {
                     classDefHandler = new ClassDefHandler();
-                    mClassDefHandlerMap.put(realOuterType, classDefHandler);
+                    mClassDefHandlerMap.put(sourceType, classDefHandler);
                 }
                 classDefHandler.add(compareClassDef);
-                if (mRealClassDefMap.containsKey(realOuterType)) {
+                if (mSourceClassDefMap.containsKey(sourceType)) {
                     if (compareClassDef.isSameName()) {
-                        mRealClassDefMap.put(realOuterType, compareClassDef);
+                        mSourceClassDefMap.put(sourceType, compareClassDef);
                         classDefHandler.setOuterClass(compareClassDef);
                     }
                 } else {
                     if (!compareClassDef.isSubClass()) {
-                        mRealClassDefMap.put(realOuterType, compareClassDef);
+                        mSourceClassDefMap.put(sourceType, compareClassDef);
                         classDefHandler.setOuterClass(compareClassDef);
                     }
                 }
@@ -111,6 +118,23 @@ public class Main {
         }
 
 
+    }
+
+    private static CompareClassDef renamePackage(CompareClassDef compareClassDef) {
+        String oldPackage = compareClassDef.getPackage();
+        String keyPath = "";
+        for (String path : mPackageMap.keySet()) {
+            if (oldPackage.startsWith(path)) {
+                if (keyPath.length() < path.length()) {
+                    keyPath = path;
+                }
+            }
+        }
+        if (keyPath.length() > 0) {
+            String realPackage = oldPackage.replace(keyPath, mPackageMap.get(keyPath));
+            compareClassDef.setRealPackage(realPackage);
+        }
+        return compareClassDef;
     }
 
     private static String getRealType(String value) {
