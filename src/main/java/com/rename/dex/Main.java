@@ -1,16 +1,15 @@
 package com.rename.dex;
 
 import com.google.common.io.Resources;
+import org.jf.dexlib2.AccessFlags;
 import org.jf.dexlib2.DexFileFactory;
 import org.jf.dexlib2.Opcodes;
-import org.jf.dexlib2.base.reference.BaseFieldReference;
+import org.jf.dexlib2.iface.Annotation;
 import org.jf.dexlib2.iface.ClassDef;
 import org.jf.dexlib2.iface.DexFile;
+import org.jf.dexlib2.iface.Field;
 import org.jf.dexlib2.iface.reference.FieldReference;
-import org.jf.dexlib2.rewriter.DexRewriter;
-import org.jf.dexlib2.rewriter.Rewriter;
-import org.jf.dexlib2.rewriter.RewriterModule;
-import org.jf.dexlib2.rewriter.Rewriters;
+import org.jf.dexlib2.rewriter.*;
 import org.jf.util.IndentingWriter;
 
 import javax.annotation.Nonnull;
@@ -23,6 +22,7 @@ public class Main {
     private static Map<String, String> mPackageMap = new HashMap<String, String>();
     private static Map<String, CompareClassDef> mClassDefMap = new LinkedHashMap<String, CompareClassDef>();
     private static Map<String, CompareClassDef> mSourceClassDefMap = new HashMap<String, CompareClassDef>();
+    private static Map<String, ClassDef> mNewClassDefMap = new HashMap<String, ClassDef>();
     private static Map<String, ClassDefHandler> mClassDefHandlerMap = new HashMap<String, ClassDefHandler>();
 
     public static void main(String[] args) {
@@ -100,9 +100,10 @@ public class Main {
             for (CompareClassDef compareClassDef : mClassDefMap.values()) {
                 writer.write(compareClassDef.getType() + "=" + compareClassDef.getRealType() + "\n");
             }
-
-
             DexRewriter rewriter = new DexRewriter(new RewriterModule() {
+
+                @Nonnull
+                @Override
                 public Rewriter<String> getTypeRewriter(Rewriters rewriters) {
                     return new Rewriter<String>() {
                         public String rewrite(String value) {
@@ -110,40 +111,34 @@ public class Main {
                         }
                     };
                 }
+            });
+            DexFile rewrittenDexFile = rewriter.rewriteDexFile(dexFile);
+            mNewClassDefMap.clear();
+            for (ClassDef classDef : rewrittenDexFile.getClasses()) {
+                mNewClassDefMap.put(classDef.getType(), classDef);
+            }
+            DexRewriter rewriterField = new DexRewriter(new RewriterModule() {
 
                 @Nonnull
                 @Override
                 public Rewriter<FieldReference> getFieldReferenceRewriter(@Nonnull Rewriters rewriters) {
-                    return new Rewriter<FieldReference>() {
+                    return new FieldReferenceRewriter(rewriters) {
                         @Nonnull
                         @Override
-                        public FieldReference rewrite(@Nonnull final FieldReference value) {
-                            return new BaseFieldReference() {
-                                @Nonnull
-                                @Override
-                                public String getDefiningClass() {
-                                    return value.getDefiningClass();
-                                }
-
+                        public FieldReference rewrite(@Nonnull FieldReference fieldReference) {
+                            return new RewrittenFieldReference(fieldReference) {
                                 @Nonnull
                                 @Override
                                 public String getName() {
-                                    return getTypeFieldName(value);
+                                    return getTypeFieldName(fieldReference);
                                 }
-
-                                @Nonnull
-                                @Override
-                                public String getType() {
-                                    return value.getType();
-                                }
-
                             };
                         }
                     };
                 }
             });
-            DexFile rewrittenDexFile = rewriter.rewriteDexFile(dexFile);
-            DexFileFactory.writeDexFile("C:\\Users\\LukeSkyWalker\\IdeaProjects\\RenameDex\\new.dex", rewrittenDexFile);
+            DexFile rewrittenFieldDexFile = rewriterField.rewriteDexFile(rewrittenDexFile);
+            DexFileFactory.writeDexFile("C:\\Users\\LukeSkyWalker\\IdeaProjects\\RenameDex\\new.dex", rewrittenFieldDexFile);
         } catch (IOException e) {
             e.printStackTrace();
         } catch (URISyntaxException e) {
@@ -153,23 +148,126 @@ public class Main {
 
     }
 
+    private static final int MATCH_NONE = 0;
+    private static final int MATCH_FIELD = 1;//有相应的字段则为1
+    private static final int MATCH_ERROR = MATCH_FIELD << 1;//有Serializable,或注解有JsonTypeInfo,或属性为public或protected则为10；
+
+    private static int getRenameFieldFlag(ClassDef classDef, FieldReference fieldReference, int match) {
+        if (classDef == null) {
+            return match;
+        }
+
+        List<ClassDef> parents = new ArrayList<ClassDef>();
+
+        String parent = classDef.getSuperclass();
+        if (hasSerializable(parents, parent)) {//继承
+            match |= MATCH_ERROR;
+            return match;
+        }
+        List<String> interfaces = classDef.getInterfaces();
+        if (interfaces != null) {//接口
+            for (String impl : interfaces) {
+                if (hasSerializable(parents, impl)) {
+                    match |= MATCH_ERROR;
+                    return match;
+                }
+            }
+        }
+        Set<? extends Annotation> annotations = classDef.getAnnotations();
+        if (annotations != null) {//判断注解
+            for (Annotation annotation : annotations) {
+                String annotationType = annotation.getType();
+                if (annotationType.equals("Lcom/fasterxml/jackson/annotation/JsonTypeInfo;")) {
+                    match |= MATCH_ERROR;
+                    return match;
+                }
+            }
+        }
+        Iterable<? extends Field> fields = classDef.getFields();
+        for (Field field : fields) {//查找字段
+            if (field.getName().equals(fieldReference.getName())
+                    && field.getType().equals(fieldReference.getType())) {
+                if (AccessFlags.PUBLIC.isSet(field.getAccessFlags())
+                        || AccessFlags.PROTECTED.isSet(field.getAccessFlags())) {
+                    match |= MATCH_ERROR;
+                    return match;
+                }
+                match |= MATCH_FIELD;
+                break;
+            }
+        }
+        for (ClassDef classDefp : parents) {
+            match |= getRenameFieldFlag(classDefp, fieldReference, match);
+            if ((MATCH_ERROR & match) != 0) {
+                return MATCH_ERROR;
+            }
+        }
+        return match;
+
+    }
+
+    private static boolean hasSerializable(List<ClassDef> parents, String parent) {
+        if (parent.equals("Ljava/io/Serializable;")) {
+            return true;
+        }
+        ClassDef classDefI = mNewClassDefMap.get(parent);
+        if (classDefI != null) {
+            parents.add(classDefI);
+        }
+        return false;
+    }
+
     private static String getTypeFieldName(FieldReference dexBackedField) {
+        String dexBackedFieldName = dexBackedField.getName();
+        ClassDef classDef = mNewClassDefMap.get(dexBackedField.getDefiningClass());
+        int renameFieldFlag = getRenameFieldFlag(classDef, dexBackedField, MATCH_NONE);
+        if ((renameFieldFlag & MATCH_ERROR) != 0 || (renameFieldFlag & MATCH_FIELD) == 0) {
+            return dexBackedFieldName;
+        }
+        if (dexBackedFieldName.length() > 2) {
+            return dexBackedFieldName;
+        } else if (dexBackedFieldName.length() == 2) {
+            char c = dexBackedFieldName.charAt(0);
+            if (c < 'a' || c > 'l') {
+                return dexBackedFieldName;
+            }
+        }
         String type = dexBackedField.getType();
         int length = type.length();
         int index = type.lastIndexOf("/");
         int index$ = type.lastIndexOf("$");
-        if (index$ > 0) {
+        if (index$ > -1) {
             index = index$;
         }
-        String name;
-        if (index > 0) {
-            name = "m" + type.substring(index + 1, length - 1) + dexBackedField.getName();
+        String typeName;
+        if (index > -1) {
+            typeName = type.substring(index + 1, length - 1);
         } else {
-            name = dexBackedField.getName();
-            System.out.println(type);
+            typeName = type;
+        }
+
+        String name;
+        int indexA = type.lastIndexOf("[") + 1;
+        if (indexA > 0) {
+            if (typeName.contains("[")) {
+                if (indexA > 1) {
+                    name = "mArray" + indexA + type.substring(indexA) + dexBackedFieldName;
+                } else {
+                    name = "mArray" + type.substring(indexA) + dexBackedFieldName;
+                }
+            } else {
+                if (indexA > 1) {
+                    name = "mArray" + indexA + typeName + dexBackedFieldName;
+                } else {
+                    name = "mArray" + typeName + dexBackedFieldName;
+                }
+            }
+        } else if (type.equals("Z")) {
+            name = "isZ" + dexBackedFieldName;
+        } else {
+            name = "m" + typeName + dexBackedFieldName;
         }
         return name;
-
     }
 
     private static CompareClassDef renamePackage(CompareClassDef compareClassDef) {
@@ -199,9 +297,10 @@ public class Main {
                 return mClassDefMap.get(value).getRealType();
             }
         } else if (value.startsWith("[")) {
-            String key = value.substring(1);
+            int index = value.lastIndexOf("[") + 1;
+            String key = value.substring(index);
             if (mClassDefMap.containsKey(key)) {
-                return "[" + mClassDefMap.get(key).getRealType();
+                return value.substring(0, index) + mClassDefMap.get(key).getRealType();
             }
         }
         return value;

@@ -33,7 +33,7 @@ public class CompareClassDef implements ClassDef {
         mName = type.substring(index + 1, type.length() - 1);
 
         int index$ = mName.indexOf("$");
-        if (index$ > 0) {
+        if (index$ > -1) {
             mOuterName = mName.substring(0, index$);
             mInnerName = mName.substring(index$ + 1);
         } else {
