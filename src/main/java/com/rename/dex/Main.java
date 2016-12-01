@@ -27,7 +27,8 @@ public class Main {
     public static void main(String[] args) {
 
         try {
-            FileReader fr = new FileReader(findResource("text\\packages.txt"));//获取文件流
+            String textFilePath=String.format("%s%spackages.txt", "text", File.separatorChar);
+            FileReader fr = new FileReader(findResource(textFilePath));//获取文件流
             BufferedReader br = new BufferedReader(fr); //将流整体读取。
             mPackageMap.clear();
             String str;
@@ -36,7 +37,7 @@ public class Main {
                 mPackageMap.put(packages[0], packages[1]);
             }
 
-            File smaliFile = new File("C:\\Users\\LukeSkyWalker\\IdeaProjects\\RenameDex\\namelines.txt");
+            File smaliFile = new File("namelines.txt");
             if (!smaliFile.exists()) {
                 if (!smaliFile.createNewFile()) {
                     System.err.println("Unable to create file " + smaliFile.toString() + " - skipping class");
@@ -137,7 +138,7 @@ public class Main {
                 }
             });
             DexFile rewrittenFieldDexFile = rewriterField.rewriteDexFile(rewrittenDexFile);
-            DexFileFactory.writeDexFile("C:\\Users\\LukeSkyWalker\\IdeaProjects\\RenameDex\\new.dex", rewrittenFieldDexFile);
+            DexFileFactory.writeDexFile("new.dex", rewrittenFieldDexFile);
         } catch (IOException e) {
             e.printStackTrace();
         } catch (URISyntaxException e) {
