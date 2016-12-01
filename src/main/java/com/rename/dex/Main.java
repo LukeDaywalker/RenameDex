@@ -1,7 +1,6 @@
 package com.rename.dex;
 
 import com.google.common.io.Resources;
-import org.jf.dexlib2.AccessFlags;
 import org.jf.dexlib2.DexFileFactory;
 import org.jf.dexlib2.Opcodes;
 import org.jf.dexlib2.iface.Annotation;
@@ -148,28 +147,28 @@ public class Main {
 
     }
 
-    private static final int MATCH_NONE = 0;
-    private static final int MATCH_FIELD = 1;//有相应的字段则为1
-    private static final int MATCH_ERROR = MATCH_FIELD << 1;//有Serializable,或注解有JsonTypeInfo,或属性为public或protected则为10；
+    private static final int FLAG_NONE = 0;
+    private static final int FLAG_FIELD = 1;//有相应的字段则为1
+    private static final int FLAG_ERROR = FLAG_FIELD << 1;//有Serializable,或注解有JsonTypeInfo,或属性为public或protected则为10；
 
-    private static int getRenameFieldFlag(ClassDef classDef, FieldReference fieldReference, int match) {
+    private static int getRenameFieldFlag(ClassDef classDef, FieldReference fieldReference, int flag) {
         if (classDef == null) {
-            return match;
+            return flag;
         }
 
         List<ClassDef> parents = new ArrayList<ClassDef>();
 
         String parent = classDef.getSuperclass();
         if (hasSerializable(parents, parent)) {//继承
-            match |= MATCH_ERROR;
-            return match;
+            flag |= FLAG_ERROR;
+            return flag;
         }
         List<String> interfaces = classDef.getInterfaces();
         if (interfaces != null) {//接口
             for (String impl : interfaces) {
                 if (hasSerializable(parents, impl)) {
-                    match |= MATCH_ERROR;
-                    return match;
+                    flag |= FLAG_ERROR;
+                    return flag;
                 }
             }
         }
@@ -178,8 +177,8 @@ public class Main {
             for (Annotation annotation : annotations) {
                 String annotationType = annotation.getType();
                 if (annotationType.equals("Lcom/fasterxml/jackson/annotation/JsonTypeInfo;")) {
-                    match |= MATCH_ERROR;
-                    return match;
+                    flag |= FLAG_ERROR;
+                    return flag;
                 }
             }
         }
@@ -187,22 +186,22 @@ public class Main {
         for (Field field : fields) {//查找字段
             if (field.getName().equals(fieldReference.getName())
                     && field.getType().equals(fieldReference.getType())) {
-                if (AccessFlags.PUBLIC.isSet(field.getAccessFlags())
-                        || AccessFlags.PROTECTED.isSet(field.getAccessFlags())) {
-                    match |= MATCH_ERROR;
-                    return match;
-                }
-                match |= MATCH_FIELD;
+//                if (AccessFlags.PUBLIC.isSet(field.getAccessFlags())
+//                        || AccessFlags.PROTECTED.isSet(field.getAccessFlags())) {
+//                    flag |= FLAG_ERROR;
+//                    return flag;
+//                }
+                flag |= FLAG_FIELD;
                 break;
             }
         }
         for (ClassDef classDefp : parents) {
-            match |= getRenameFieldFlag(classDefp, fieldReference, match);
-            if ((MATCH_ERROR & match) != 0) {
-                return MATCH_ERROR;
+            flag |= getRenameFieldFlag(classDefp, fieldReference, flag);
+            if ((FLAG_ERROR & flag) != 0) {
+                return FLAG_ERROR;
             }
         }
-        return match;
+        return flag;
 
     }
 
@@ -220,8 +219,8 @@ public class Main {
     private static String getTypeFieldName(FieldReference dexBackedField) {
         String dexBackedFieldName = dexBackedField.getName();
         ClassDef classDef = mNewClassDefMap.get(dexBackedField.getDefiningClass());
-        int renameFieldFlag = getRenameFieldFlag(classDef, dexBackedField, MATCH_NONE);
-        if ((renameFieldFlag & MATCH_ERROR) != 0 || (renameFieldFlag & MATCH_FIELD) == 0) {
+        int renameFieldFlag = getRenameFieldFlag(classDef, dexBackedField, FLAG_NONE);
+        if ((renameFieldFlag & FLAG_ERROR) != 0 || (renameFieldFlag & FLAG_FIELD) == 0) {
             return dexBackedFieldName;
         }
         if (dexBackedFieldName.length() > 2) {
