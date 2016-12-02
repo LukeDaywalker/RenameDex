@@ -144,7 +144,7 @@ public class CompareClassDef implements ClassDef {
 
     private String getRegularOneName(String name) {
         if (!isRegularName(name)) {
-            name = "IC" + name;
+            name = "MC" + name;
         }
         return name;
     }
