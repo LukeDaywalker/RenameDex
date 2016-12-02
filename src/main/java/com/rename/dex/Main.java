@@ -100,6 +100,7 @@ public class Main {
             for (CompareClassDef compareClassDef : mClassDefMap.values()) {
                 writer.write(compareClassDef.getType() + "=" + compareClassDef.getRealType() + "\n");
             }
+            writer.flush();
             DexRewriter rewriter = new DexRewriter(new RewriterModule() {
 
                 @Nonnull
@@ -138,7 +139,7 @@ public class Main {
                 }
             });
             DexFile rewrittenFieldDexFile = rewriterField.rewriteDexFile(rewrittenDexFile);
-            DexFileFactory.writeDexFile("new.dex", rewrittenFieldDexFile);
+            DexFileFactory.writeDexFile("classes.dex", rewrittenFieldDexFile);
         } catch (IOException e) {
             e.printStackTrace();
         } catch (URISyntaxException e) {
