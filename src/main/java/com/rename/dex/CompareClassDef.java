@@ -43,7 +43,9 @@ public class CompareClassDef implements ClassDef {
 
         mRealPackage = mPackage;
         String sourceFile = classDef.getSourceFile();
-        if (sourceFile != null) {
+        if (sourceFile != null
+                && sourceFile.endsWith(".java")/*有些java文件编译后不会保留正确的名字，而是统一保留了一个假的名字，
+                这些名字不以".java"结尾，例如百度的某些类库*/) {
             mRealName = sourceFile.substring(0, sourceFile.length() - 5);
             mRealType = mRealPackage + mRealName + ";";
             mSourceName = mRealName;

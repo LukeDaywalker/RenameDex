@@ -27,7 +27,7 @@ public class Main {
     public static void main(String[] args) {
 
         try {
-            String textFilePath=String.format("%s%spackages.txt", "text", File.separatorChar);
+            String textFilePath = String.format("%s%spackages.txt", "text", File.separatorChar);
             FileReader fr = new FileReader(findResource(textFilePath));//获取文件流
             BufferedReader br = new BufferedReader(fr); //将流整体读取。
             mPackageMap.clear();
@@ -296,14 +296,37 @@ public class Main {
         if (value.startsWith("L")) {
             if (mClassDefMap.containsKey(value)) {
                 return mClassDefMap.get(value).getRealType();
+            } else {//处理不含";"的情况(某些泛型的处理)
+                String key = value + ";";
+                if (mClassDefMap.containsKey(key)) {
+                    String realType = mClassDefMap.get(key).getRealType();
+                    String result = realType.substring(0, realType.length() - 1);
+//                    if (!value.equals(result)) {
+//                        System.out.println("value:" + value);
+//                        System.out.println("result:" + result);
+//                    }
+                    return result;
+                }
             }
         } else if (value.startsWith("[")) {
             int index = value.lastIndexOf("[") + 1;
             String key = value.substring(index);
             if (mClassDefMap.containsKey(key)) {
                 return value.substring(0, index) + mClassDefMap.get(key).getRealType();
+            } else {//处理不含";"的情况(某些泛型的处理)
+                key = key + ";";
+                if (mClassDefMap.containsKey(key)) {
+                    String realType = mClassDefMap.get(key).getRealType();
+                    String result = value.substring(0, index) + realType.substring(0, realType.length() - 1);
+//                    if (!value.equals(result)) {
+//                        System.out.println("value:" + value);
+//                        System.out.println("results:" + result);
+//                    }
+                    return result;
+                }
             }
         }
+//        System.out.println(value);
         return value;
     }
 
