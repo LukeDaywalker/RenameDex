@@ -137,16 +137,16 @@ public class CompareClassDef implements ClassDef {
             return name;
         }
         String[] s = name.split("\\$");
-        String result = getRegularOneName(s[0]);
+        String result = getRegularOneName(s[0], 0);
         for (int i = 1; i < s.length; i++) {
-            result += "$" + getRegularOneName(s[i]);
+            result += "$" + getRegularOneName(s[i], i);
         }
         return result;
     }
 
-    private String getRegularOneName(String name) {
+    private String getRegularOneName(String name, int innerHierarchy) {
         if (!isRegularName(name)) {
-            name = "MC" + name;
+            name = "MC" + innerHierarchy + name;
         }
         return name;
     }

@@ -8,6 +8,7 @@ import org.jf.dexlib2.iface.ClassDef;
 import org.jf.dexlib2.iface.DexFile;
 import org.jf.dexlib2.iface.Field;
 import org.jf.dexlib2.iface.reference.FieldReference;
+import org.jf.dexlib2.iface.reference.MethodReference;
 import org.jf.dexlib2.rewriter.*;
 import org.jf.util.IndentingWriter;
 
@@ -23,6 +24,10 @@ public class Main {
     private static Map<String, CompareClassDef> mSourceClassDefMap = new HashMap<String, CompareClassDef>();
     private static Map<String, ClassDef> mNewClassDefMap = new HashMap<String, ClassDef>();
     private static Map<String, ClassDefHandler> mClassDefHandlerMap = new HashMap<String, ClassDefHandler>();
+    /**
+     * TODO 不同应用应该不一致，此处为lbe的
+     */
+    private static final String[] appStr = {"Landroid/support","Lcom/alibaba", "Lcom/amplitude/", "Lcom/baidu", "Lcom/bumptech", "Lcom/lbe", "Lcom/phantom", "Lcom/qq", "Lcom/tencent"};
 
     public static void main(String[] args) {
 
@@ -51,7 +56,7 @@ public class Main {
             final Writer writer = new IndentingWriter(bufWriter);
 
             // write your code here
-            String test = "dex";
+            final String test = "dex";
             String dexFilePath = String.format("%s%sclasses.dex", test, File.separatorChar);
 
             DexFile dexFile = null;
@@ -137,6 +142,43 @@ public class Main {
                         }
                     };
                 }
+
+                @Nonnull
+                @Override
+                public Rewriter<org.jf.dexlib2.iface.reference.MethodReference> getMethodReferenceRewriter(@Nonnull Rewriters rewriters) {
+                    return new MethodReferenceRewriter(rewriters) {
+                        @Nonnull
+                        @Override
+                        public MethodReference rewrite(@Nonnull MethodReference methodReference) {
+                            return new RewrittenMethodReference(methodReference) {
+                                @Nonnull
+                                @Override
+                                public String getName() {
+                                    String name = methodReference.getName();
+                                    String definingClass = methodReference.getDefiningClass();
+                                    if(definingClass.contains("UIHelper")&&methodReference.toString().contains("a(Ljava/lang/Object;Lcom/lbe/parallel/GlideAnimation;)V")) {
+                                    System.out.println(methodReference);
+                                    }
+                                    if (isAppMethod(definingClass) && name.length() == 1) {
+                                        List<? extends CharSequence> parameterTypes = methodReference.getParameterTypes();
+                                        for (CharSequence str : parameterTypes) {
+                                            SimpleType type = new SimpleType(str.toString()).invoke();
+                                            int arrayCount = type.getArrayCount();
+                                            String pName;
+                                            if (arrayCount > 0) {
+                                                pName = "_$" + arrayCount + type.getName();
+                                            } else {
+                                                pName = "_" + type.getName();
+                                            }
+                                            name += pName;
+                                        }
+                                    }
+                                    return name;
+                                }
+                            };
+                        }
+                    };
+                }
             });
             DexFile rewrittenFieldDexFile = rewriterField.rewriteDexFile(rewrittenDexFile);
             DexFileFactory.writeDexFile("classes.dex", rewrittenFieldDexFile);
@@ -147,6 +189,15 @@ public class Main {
         }
 
 
+    }
+
+    private static boolean isAppMethod(String definingClass) {
+        for (String str : appStr) {
+            if (definingClass.contains(str)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private static final int FLAG_NONE = 0;
@@ -234,35 +285,14 @@ public class Main {
             }
         }
         String type = dexBackedField.getType();
-        int length = type.length();
-        int index = type.lastIndexOf("/");
-        int index$ = type.lastIndexOf("$");
-        if (index$ > -1) {
-            index = index$;
-        }
-        String typeName;
-        if (index > -1) {
-            typeName = type.substring(index + 1, length - 1);
-        } else {
-            typeName = type;
-        }
+        SimpleType simpleType = new SimpleType(type).invoke();
+        int arrayCount = simpleType.getArrayCount();
+        String typeName = simpleType.getName();
 
         String name;
-        int indexA = type.lastIndexOf("[") + 1;
-        if (indexA > 0) {
-            if (typeName.contains("[")) {
-                if (indexA > 1) {
-                    name = "mArray" + indexA + type.substring(indexA) + dexBackedFieldName;
-                } else {
-                    name = "mArray" + type.substring(indexA) + dexBackedFieldName;
-                }
-            } else {
-                if (indexA > 1) {
-                    name = "mArray" + indexA + typeName + dexBackedFieldName;
-                } else {
-                    name = "mArray" + typeName + dexBackedFieldName;
-                }
-            }
+
+        if (arrayCount > 0) {
+            name = "mArray" + arrayCount + typeName + dexBackedFieldName;
         } else if (type.equals("Z")) {
             name = "isZ" + dexBackedFieldName;
         } else {
@@ -336,4 +366,46 @@ public class Main {
         return new File(resUrl.toURI());
     }
 
+    private static class SimpleType {
+        private String type;
+        private int arrayCount;
+        private String name;
+
+        public SimpleType(String type) {
+            this.type = type;
+        }
+
+        public int getArrayCount() {
+            return arrayCount;
+        }
+
+        public String getName() {
+            return name;
+        }
+
+        public SimpleType invoke() {
+            int length = type.length();
+            int start = type.lastIndexOf("[");
+            int start_ = type.lastIndexOf("/");
+            int start$ = type.lastIndexOf("$");
+            arrayCount = start + 1;
+            int end = length;
+            if (type.endsWith(";")) {
+                end = length - 1;
+            }
+
+            if (start_ > start) {
+                start = start_;
+            }
+            if (start$ > start) {
+                start = start$;
+            }
+            if (start > -1) {
+                name = type.substring(start + 1, end);
+            } else {
+                name = type;
+            }
+            return this;
+        }
+    }
 }
